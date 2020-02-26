@@ -6,7 +6,7 @@
 *&
 *&
 *&---------------------------------------------------------------------*
-REPORT ZALV_POC.
+REPORT Zprint_POC.
 
 * Structure for address
 TYPES: BEGIN OF s_addr,
