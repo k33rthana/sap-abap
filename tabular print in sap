@@ -1,0 +1,176 @@
+*&---------------------------------------------------------------------*
+*& Report  PROGRAM TO PRINT tabular list of item number, material number, item description, quantity, unit price, net value of 
+*&     items corresponding to a given sales order number along with the sold to address and ship to address
+*&      created by : Keerthana S    Created On : 26-02-2020
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT ZALV_POC.
+
+* Structure for address
+TYPES: BEGIN OF s_addr,
+  vbeln      TYPE vbeln_va,
+  parvw      TYPE parvw,
+  adrnr      TYPE adrnr,
+  name1      TYPE ad_name1,
+  name2      TYPE ad_name2,
+  name3      TYPE ad_name3,
+  city1      TYPE ad_city1,
+  city2      TYPE ad_city2,
+  post_code1 TYPE ad_pstcd1,
+  tel_number TYPE ad_tlnmbr1,
+END OF s_addr.
+
+*structure for item data
+TYPES: BEGIN OF s_item_data,
+  posnr TYPE vbeln_va,
+  matnr TYPE matnr,
+  maktx TYPE maktx,
+ KWMENG TYPE KWMENG,
+  netpr TYPE netpr,
+  netwr TYPE netwr_ap,
+END OF s_item_data.
+
+*stucture for sales document data
+TYPES: BEGIN OF s_doc,
+  vbeln TYPE vbeln_va,
+  parvw TYPE parvw,
+  adrnr TYPE adrnr,
+  kunnr TYPE kunnr,
+END OF s_doc.
+
+* declaration of internal tables, workarea, and variables.
+DATA: it_addr_sold TYPE TABLE OF s_addr,
+      wa_addr_sold TYPE s_addr,
+      it_addr_ship TYPE TABLE OF s_addr,
+      wa_addr_ship TYPE s_addr,
+      it_doc       TYPE TABLE OF s_doc,
+      wa_doc       TYPE s_doc,
+      it_item_data TYPE TABLE OF s_item_data,
+      wa_item_data TYPE s_item_data,
+      lv_vbeln     TYPE vbeln_va,
+      lv_net_total TYPE NETWR_AP,
+      lv_tot_price TYPE NETWR_AP.
+
+SELECTION-SCREEN BEGIN OF BLOCK block1 WITH FRAME TITLE TEXT-001.
+  SELECT-OPTIONS: s_vbeln FOR lv_vbeln.
+SELECTION-SCREEN END OF BLOCK block1.
+
+START-OF-SELECTION.
+*populating the internal tables
+SELECT  vbeln,
+        parvw,
+        adrnr,
+        kunnr
+        FROM vbpa
+        INTO TABLE @it_doc
+        WHERE vbeln IN @s_vbeln.
+
+
+
+SELECT  vbpa~vbeln,
+        vbpa~parvw,
+        vbpa~adrnr,
+        adrc~name1,
+        adrc~name2,
+        adrc~name3,
+        adrc~city1,
+        adrc~city2,
+        adrc~post_code1,
+        adrc~tel_number
+        INTO TABLE @it_addr_sold
+        FROM adrc AS adrc
+        INNER JOIN vbpa AS vbpa
+        ON vbpa~adrnr = adrc~addrnumber
+        WHERE vbpa~parvw = 'AG' AND vbpa~vbeln IN @s_vbeln.
+
+
+SELECT  vbpa~vbeln,
+        vbpa~parvw,
+        vbpa~adrnr,
+        adrc~name1,
+        adrc~name2,
+        adrc~name3,
+        adrc~city1,
+        adrc~city2,
+        adrc~post_code1,
+        adrc~tel_number
+        INTO TABLE @it_addr_ship
+        FROM adrc AS adrc
+        INNER JOIN vbpa AS vbpa
+        ON vbpa~adrnr = adrc~addrnumber
+        WHERE vbpa~parvw = 'WE' AND vbpa~vbeln IN @s_vbeln.
+
+
+
+SELECT  vbap~posnr,
+        vbap~matnr,
+        makt~maktx,
+        vbap~KWMENG,
+        vbap~netpr,
+        vbap~netwr
+        INTO TABLE @it_item_data
+        FROM vbap AS vbap
+        INNER JOIN makt AS makt
+        ON vbap~matnr = makt~matnr
+        WHERE vbap~vbeln IN @s_vbeln.
+
+* printing the sold to and ship to address
+IF sy-subrc <> 0.
+  EXIT.
+ELSE .
+  WRITE:/ 'SALES ORDER NO. : ',s_vbeln. NEW-LINE.
+  WRITE:/ 'SOLD TO :',|{ 'SHIP TO :' WIDTH = 50 ALIGN = RIGHT }|.
+  LOOP AT it_addr_ship INTO wa_addr_ship.
+    LOOP AT it_addr_sold INTO wa_addr_sold.
+      WRITE:/10 wa_addr_sold-name1,
+      |{ wa_addr_ship-name1  }| UNDER 'ship to',
+      /10 wa_addr_sold-name2,
+      |{ wa_addr_ship-name2 }| UNDER wa_addr_ship-name1,
+      /10 wa_addr_sold-name3,
+      |{ wa_addr_ship-name3 }| UNDER wa_addr_ship-name2,
+      /10 wa_addr_sold-city1,
+      |{ wa_addr_ship-city1 }| UNDER wa_addr_ship-city1,
+      /10 wa_addr_sold-city2,
+      |{ wa_addr_ship-city2 }| UNDER wa_addr_ship-city2,
+      /10 wa_addr_sold-post_code1,
+      |{ wa_addr_ship-post_code1 }| UNDER wa_addr_ship-post_code1,
+      /10 wa_addr_sold-tel_number,
+      |{ wa_addr_ship-tel_number }| UNDER wa_addr_ship-tel_number.
+    ENDLOOP.
+  ENDLOOP.
+ENDIF.
+NEW-LINE.
+NEW-LINE.
+ULINE AT /(130).
+
+lv_tot_price = 0.
+lv_net_total = 0.
+
+*printing the item details in the sales order.
+
+IF it_item_data IS NOT INITIAL.
+  WRITE:/  '|','ITEM NUMBER',15'|','MATNR',
+  25'|','DESCRIPTION',70'|','QTY',
+  80'|','UNIT PRICE',100'|','NET VALUE',130'|'.
+
+  LOOP AT it_item_data INTO wa_item_data.
+    AT NEW posnr .ULINE AT /(130). ENDAT.
+    WRITE:/ '|',wa_item_data-posnr ,15'|',wa_item_data-matnr ,
+    25'|',wa_item_data-maktx ,70'|',wa_item_data-KWMENG,
+    80'|',wa_item_data-netpr ,100'|',wa_item_data-netwr, 130'|'.
+    lv_tot_price = lv_tot_price + wa_item_data-netwr.
+  ENDLOOP.
+  ULINE AT /(130).
+  NEW-LINE.
+  ULINE AT /40(36).
+  
+  *cumilating the report details
+  lv_net_total = lv_tot_price + lv_tot_price * '0.15' .
+  WRITE:/40 '|','TOTAL',52' :', 54 lv_tot_price, 75'|',
+  /40 '|','TAX',52' : ', 54'15%', 75'|',
+  /40 '|','NET TOTAL',52' :',54 lv_net_total, 75'|'.
+  ULINE AT /40(36).
+
+ENDIF.
